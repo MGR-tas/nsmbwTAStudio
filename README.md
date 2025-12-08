@@ -166,6 +166,4 @@ Save LoadDoc, 5-4
 
 
 ## Contact: 
-`#tas-discussion` in the [NSMBW Speedrunning Discord Server](https://discord.gg/T7Nwspm)
-
-[My Discord Server](https://discord.gg/JxXxKAPKwT)
+I can always be found in `#tas-discussion` in the [NSMBW Speedrunning Discord Server](https://discord.gg/T7Nwspm)
