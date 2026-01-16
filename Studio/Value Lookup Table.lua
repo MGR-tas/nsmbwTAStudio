@@ -19,8 +19,6 @@ inputTable = {
 }
 
 lookupTable = {
-["InputE"] = 0x8039F460,
-["InputJ"] = 0x8039F120,
 ["Player"] = 0x8154B804,
 [".Collision"] = 0x10D4,
 ["Collision"] = 0x8154C8D8,
@@ -53,8 +51,6 @@ lookupTable = {
 ["PipeTimerL"] = 0x8154BC24,
 [".PipeTimerR"] = 0x421,
 ["PipeTimerR"] = 0x8154BC25,
-["RNGE"] = 0x80429F44,
-["RNGJ"] = 0x80429C64,
 ["Inv"] = 0x815DBB74,
 ["Inventory"] = 0x815DBB74,
 [".Mushrooms"] = 0x0,
@@ -69,16 +65,8 @@ lookupTable = {
 ["FrameTypeA"] = 0x815E44EE,
 ["FrameTypeB"] = 0x923d4066,
 ["SwitchTimer"] = 0x815E4338,
-["LifeCountE"] = 0x80354E90,
-["LifeCountJ"] = 0x80354C10,
-["CoinCountE"] = 0x80354EA0,
-["CoinCountJ"] = 0x80354C20,
-["ScoreE"] = 0x80429CC0,
-["ScoreJ"] = 0x804299E0,
 ["ProjectileCountA"] = 0x8037582B,
 ["ProjectileCountB"] = 0x8037583B,
-["LevelIDE"] = 0x80373D7C,
-["LevelIDJ"] = 0x80373AFC,
 ["LevelDeaths"] = 0x80C80624,
 [".1"] = 0x0,
 [".2"] = 0x2A,
@@ -102,11 +90,40 @@ lookupTable = {
 ["6"] = 5,
 ["7"] = 6,
 ["8"] = 7,
-["9"] = 8
+["9"] = 8,
+["RNGE"] = 0x80429F44,
+["RNGJ"] = 0x80429C64,
+["RNGP"] = 0x8042A224,
+["RNGK"] = 0x80436BE4,
+["RNGW"] = 0x80434FE4,
+["InputE"] = 0x8039F460,
+["InputJ"] = 0x8039F120,
+["InputP"] = 0x8039F760,
+["InputK"] = 0x803AC160,
+["InputW"] = 0x803AA560,
+["ScoreE"] = 0x80429CC0,
+["ScoreJ"] = 0x804299E0,
+["ScoreP"] = 0x80429FA0,
+["ScoreK"] = 0x80436960,
+["ScoreW"] = 0x80434D60,
+["LevelIDE"] = 0x80373D7C,
+["LevelIDJ"] = 0x80373AFC,
+["LevelIDP"] = 0x8037407C,
+["LevelIDK"] = 0x80380A7C,
+["LevelIDW"] = 0x8037EE7C,
+["CoinCountE"] = 0x80354EA0,
+["CoinCountJ"] = 0x80354C20,
+["CoinCountP"] = 0x803551A0,
+["CoinCountK"] = 0x80361BA0,
+["CoinCountW"] = 0x8035FFA0,
+["LifeCountE"] = 0x80354E90,
+["LifeCountJ"] = 0x80354C10,
+["LifeCountP"] = 0x80355190,
+["LifeCountK"] = 0x80361B90,
+["LifeCountW"] = 0x8035FF90,
 }
 
 validLookupOptions = [[
-Input
 Player
 .Collision
 .PosX
@@ -139,7 +156,6 @@ Powerup
 PS
 PipeTimerL
 PipeTimerR
-RNG
 Inv
 Inventory
 .Mushrooms
@@ -154,12 +170,8 @@ IGT
 FrameTypeA
 FrameTypeB
 SwitchTimer
-LifeCount
-CoinCount
-Score
 ProjectileCountA
 ProjectileCountB
-LevelID
 LevelDeaths
 .1
 .2
@@ -185,6 +197,12 @@ Airship
 7
 8
 9
+RNG
+Input
+Score
+LevelID
+CoinCount
+LifeCount
 ]]
 
-regionSpecificList = 'LevelID, Score, CoinCount, LifeCount, RNG'
+regionSpecificList = 'RNG, Input, Score, LevelID, CoinCount, LifeCount'

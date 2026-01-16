@@ -370,6 +370,7 @@ function onScriptUpdate()
 --Useful for level banner dismissal - mash 2/A and this will show the frame that the banner got dismissed. Then go back and press 2/A 3f before the number shown by this (also dolphin's turbo is bad so use a script to mash (Alternate.lua) or just experiment with pressing 2/A on a few different frames to see which one is optimal). Automatically hidden if you're in-level.
 
   if core.time.get().igt == 1 then
+    local lastchange, recordstate
     if ReadValue8(0x80C87DBB) == 0 then
       if recordstate == 1 then
         --loadlength = GetFrameCount() - lastchange
@@ -387,44 +388,41 @@ function onScriptUpdate()
   end
 
   text = text .. '\n\n--  Mario  --'
---[[if ReadValueString(3, 1) == 'E' then
-  text = string.format('%s\nInputs : %X', text, core.players.P1().Misc[5])
-elseif ReadValueString(3, 1) == 'J' then
-  text = string.format('%s\nInputs : %X', text, core.players.P1().Misc[6])
-end]]
+  --text = string.format('%s\nInputs : %X', text, core.players.P1().Misc[5])
 
-  text = string.format('%s\nCurrent State: %s', text, p1.Misc[8])
-  text = string.format('%s\nPrevious State: %s', text, p1.Misc[9])
+  text = string.format('%s\nCurrent State: %s', text, p1.Misc[7])
+  text = string.format('%s\nPrevious State: %s', text, p1.Misc[8])
   --text = string.format('%s\nIs state: %s', text, isState(0x88))
   --text = string.format('%s\n\nSet State: %s', text, setState(0x4, 0))
 
   local collisionText = '\n'
-    if isPressed(1, core.players.P1().Misc[7]) then
-      collisionText = collisionText .. 'Ground '
-      if isPressed (0x1000000, core.players.P1().Misc[7]) then
-        collisionText = collisionText .. '(Ice) '
-      end
+  local flags = core.players.P1().Misc[6]
+  if isPressed(1, flags) then
+    collisionText = collisionText .. 'Ground '
+    if isPressed (0x1000000, flags) then
+      collisionText = collisionText .. '(Ice) '
     end
-    if isPressed(2, core.players.P1().Misc[7]) then
-      collisionText = collisionText .. 'Ceiling '
+  end
+  if isPressed(2, flags) then
+    collisionText = collisionText .. 'Ceiling '
+  end
+  if isPressed(8, flags) then
+    collisionText = collisionText .. 'WallL '
+  end
+  if isPressed(0x10, flags) then
+    collisionText = collisionText .. 'WallR '
+  end
+  if isPressed(0x4000, flags) then  --0x10000 is also related?
+    collisionText = collisionText .. 'Water '
+    if isPressed(0x40000, flags) then
+      collisionText = collisionText .. '(bubble) '
     end
-    if isPressed(0x10, core.players.P1().Misc[7]) then
-      collisionText = collisionText .. 'WallR '
-    end
-    if isPressed(8, core.players.P1().Misc[7]) then
-      collisionText = collisionText .. 'WallL '
-    end
-    if isPressed(0x4000, core.players.P1().Misc[7]) then  --0x10000 is also related?
-      collisionText = collisionText .. 'Water '
-      if isPressed(0x40000, core.players.P1().Misc[7]) then
-        collisionText = collisionText .. '(bubble) '
-      end
-    elseif isPressed(0x8000, core.players.P1().Misc[7]) then
-      collisionText = collisionText .. 'Liquid (Surface) '
-    end
-    if isPressed(0x20000, core.players.P1().Misc[7]) then
-      collisionText = collisionText .. 'StandingOnLiquidSurface?'
-    end
+  elseif isPressed(0x8000, flags) then
+    collisionText = collisionText .. 'Liquid (Surface) '
+  end
+  if isPressed(0x20000, flags) then
+    collisionText = collisionText .. 'StandingOnLiquidSurface?'
+  end
   text = text .. collisionText
 
   text = string.format('%s\n\nX Position  : %.4f', text, p1.Pos[1])
@@ -463,7 +461,7 @@ end]]
     text = string.format('%s\nPipe Timer  : %.0f', text, p1.Misc[4])
   end
   text = string.format('%s\nCountdown   : %.0f', text, p1.Timers[7])
-  text = string.format('%s\nAction Stage: %.0f', text, p1.Misc[10])
+  text = string.format('%s\nAction Stage: %.0f', text, p1.Misc[9])
 
   --text = string.format('%s\n\nChanged Flags : %s', text, getChangedFlags())
   text = string.format('%s\n\n%s', text, getAllStates())

@@ -1,8 +1,7 @@
 
 --[[
   TODO:
-    - Add functions for players 2-4.
-    - Add PAL support (if needed).
+  - Test addresses for all versions
 ]]
 
 local core    = {}
@@ -13,10 +12,33 @@ local time    = {}
 local object  = {}
 local searchItem = ',AC_FLOOR_HOLE_DOKAN,' -- fill this with objects you want to watch in format ',object1,object2,object3,'  (useful for watching position/speed of enemies/objects or seeing when they load). To use, uncomment this line near the end of Data.lua
 
+local syms = {
+  __rvl_wpadcb = {
+    E = 0x8039f360, J = 0x8039f0e0,
+    P = 0x8039f660, K = 0x803ac060,
+    W = 0x803aa460
+  },
+  dGameCom__m_rnd = {
+    E = 0x80429f44, J = 0x80429c64,
+    P = 0x8042a224, K = 0x80436be4,
+    W = 0x80434fe4
+  },
+  fManager_c__m_executeManage = {
+    E = 0x80377a34, J = 0x803777B4,
+    P = 0x80377d34, K = 0x80384734,
+    W = 0x80382b34
+  },
+  hash_A3F88BCE_A3F88BCE = {
+    E = 0x80429F60, J = 0x80429c80,
+    P = 0x8042a240, K = 0x80436c00,
+    W = 0x80435000
+  },
+}
+
 function core.game_id_rev()
-  local id  = ReadValueString(4, 2)
-  local reg = ReadValueString(3, 1)
-  local rev = ReadValue8(7)
+  local id  = ReadValueString(0x80000004, 2)
+  local reg = ReadValueString(0x80000003, 1)
+  local rev = ReadValue8(0x80000007)
 
   return {ID = id, Region = reg, Rev = rev}
 end
@@ -26,63 +48,77 @@ local reg = core.game_id_rev().Region
 local rev = core.game_id_rev().Rev
 
 -- PLAYER STATS --
+players.addrs = {
+  0x8154b804, -- P1
+  0x81548aec, -- P2
+  0x81545dd4, -- P3
+  0x815430bc, -- P4
+}
 
-p1 = 0x8154b804
+function players.player(player)
+  local addr = players.addrs[player]
 
-function players.P1()
-
-  local currentState = ReadValueString(GetPointerNormal(p1 + 0x1478, 4, 0), 99)
-  local previousState = ReadValueString(GetPointerNormal(p1 + 0x1494, 4, 0), 99)
-  local demoState = ReadValueString(GetPointerNormal(p1 + 0x142C, 4, 0), 99)
+  local currentState = ReadValueString(GetPointerNormal(addr + 0x1478, 4, 0), 99)
+  local previousState = ReadValueString(GetPointerNormal(addr + 0x1494, 4, 0), 99)
+  local demoState = ReadValueString(GetPointerNormal(addr + 0x142C, 4, 0), 99)
   if demoState ~= 'daPlBase_c::StateID_DemoNone' then
     currentState = demoState
   end
 
-  local inputsUS = ReadValue16(0x8039F460)
-  local inputsJP = ReadValue16(0x8039F120)
-  local collisionFlags = ReadValue32(p1 + 0x10D4)
+  local inputs = ReadValue16(
+    syms.__rvl_wpadcb[reg] + (0xbe0 * player) + 0x100
+  ) --__rvl_wpadcb[player].rxBufs[1]
+  local collisionFlags = ReadValue32(addr + 0x10D4)
 
-  local x_pos = ReadValueFloat(p1 + 0xAC)
-  local x_disp = ReadValueFloat(p1 + 0xC4)
-  local x_spd = ReadValueFloat(p1 + 0x10C)
-  local x_cap = ReadValueFloat(p1 + 0x110)
-  local x_accel = ReadValueFloat(p1 + 0x11C)
+  local x_pos = ReadValueFloat(addr + 0xAC)
+  local x_disp = ReadValueFloat(addr + 0xC4)
+  local x_spd = ReadValueFloat(addr + 0x10C)
+  local x_cap = ReadValueFloat(addr + 0x110)
+  local x_accel = ReadValueFloat(addr + 0x11C)
 
-  local y_pos = ReadValueFloat(p1 + 0xB0)
-  local y_disp = ReadValueFloat(p1 + 0xC8)
-  local y_spd = ReadValueFloat(p1 + 0xEC)
-  local y_accel = ReadValueFloat(p1 + 0x114)
+  local y_pos = ReadValueFloat(addr + 0xB0)
+  local y_disp = ReadValueFloat(addr + 0xC8)
+  local y_spd = ReadValueFloat(addr + 0xEC)
+  local y_accel = ReadValueFloat(addr + 0x114)
 
-  local star = ReadValue32(p1 + 0x1070)
-  local twirl = ReadValue32(p1 + 0x27C8)
-  local slide = ReadValue32(p1 + 0x1A18)
-  local spin = ReadValue32(p1 + 0x17C4)
-  local action = ReadValue32(p1 + 0xEC0)
-  local jump = ReadValue8(p1 + 0x1568)
-  local someCountdown = ReadValue32(p1 + 0x14A8)
+  local star = ReadValue32(addr + 0x1070)
+  local twirl = ReadValue32(addr + 0x27C8)
+  local slide = ReadValue32(addr + 0x1A18)
+  local spin = ReadValue32(addr + 0x17C4)
+  local action = ReadValue32(addr + 0xEC0)
+  local jump = ReadValue8(addr + 0x1568)
+  local someCountdown = ReadValue32(addr + 0x14A8)
 
-  local powerup = ReadValue32(p1 + 0x14E0)
-  local stored_jump = ReadValue32(p1 + 0x1564)
-  local lPipe = ReadValue8(p1 + 0x420)
-  local rPipe = ReadValue8(p1 + 0x421)
-  local hipAttackStage = ReadValue32(p1+ 0x14A4)
+  local powerup = ReadValue32(addr + 0x14E0)
+  local stored_jump = ReadValue32(addr + 0x1564)
+  local lPipe = ReadValue8(addr + 0x420)
+  local rPipe = ReadValue8(addr + 0x421)
+  local hipAttackStage = ReadValue32(addr+ 0x14A4)
 
   return {
     Pos    = {x_pos, y_pos},
     Speed  = {x_disp, x_spd, x_cap, x_accel, y_disp, y_spd, y_accel},
     Timers = {star, twirl, slide, spin, action, jump, someCountdown},
-    Misc   = {powerup, stored_jump, lPipe, rPipe, inputsUS, inputsJP, collisionFlags, currentState, previousState, hipAttackStage}
+    Misc   = {powerup, stored_jump, lPipe, rPipe, inputs, collisionFlags, currentState, previousState, hipAttackStage}
   }
+end
+
+function players.P1()
+  return players.player(0)
+end
+function players.P2()
+  return players.player(1)
+end
+function players.P3()
+  return players.player(2)
+end
+function players.P4()
+  return players.player(3)
 end
 
 
 -- RNG --
-
-if reg == 'E' then
-  rng.addr = 0x80429F44
-elseif reg == 'J' then
-  rng.addr = 0x80429C64
-end
+rng.addr = syms.dGameCom__m_rnd[reg]
 
 function rng.next(x, maximum)
   local x = rng.increment(x, 1)
@@ -120,7 +156,7 @@ function stats.misc()
     ps7s       = ReadValue32(stats.inv_addr_ref + 0x1C),
     switch_timer = ReadValue32(0x815E4338),
     last_level_name = ReadValueString(0x80373AFC, 99),
-    current_world = ReadValueString(0x80429F60, 99),
+    current_world = ReadValueString(syms.hash_A3F88BCE_A3F88BCE[reg], 99),
     current_instance = ReadValueString(0x80D20F04, 99)
   }
 end
@@ -139,18 +175,14 @@ end
 -- OBJECT LIST --
 
 function object.list()
-  objName = {}
-  objAddr = {}
+  local objName = {}
+  local objAddr = {}
 
-  if ReadValueString(3, 1) == 'E' then
-    objectNodeAddr = ReadValue32(0x80377a34)
-  elseif ReadValueString(3, 1) == 'J' then
-    objectNodeAddr = ReadValue32(0x803777B4)
-  end
-  i = 1
+  local objectNodeAddr = ReadValue32(syms.fManager_c__m_executeManage[reg])
+  local i = 1
   while (objectNodeAddr ~= 0x0) do
-    objectAddr    = ReadValue32(objectNodeAddr + 0x8)
-    objectNamePtr = ReadValue32(objectAddr + 0x6C)
+    local objectAddr    = ReadValue32(objectNodeAddr + 0x8)
+    local objectNamePtr = ReadValue32(objectAddr + 0x6C)
 
     objName[i] = ReadValueString(objectNamePtr, 0x100)
     objAddr[i] = string.format('0x%X', objectAddr)
@@ -165,7 +197,7 @@ function object.list()
   local itemSearchList = ''
   local loadCheckObjs = 0
   while objName[ObjectNum] ~= nil do
-    j = 0
+    local j = 0
     while objName[ObjectNum] == objName[ObjectNum + j] do
       fullObjList = fullObjList .. objAddr[ObjectNum + j] .. ' ' .. objName[ObjectNum] .. '\n'
       if string.find(searchItem, ',' .. objName[ObjectNum] .. ',') ~= nil then
@@ -205,5 +237,6 @@ core.rng     = rng
 core.stats   = stats
 core.time    = time
 core.object  = object
+core.syms    = syms
 
 return core

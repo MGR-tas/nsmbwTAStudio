@@ -1,0 +1,68 @@
+{
+	"Lua.diagnostics.globals": [
+		// https://github.com/MikeXander/Dolphin-Lua-Core/blob/d1b6a75/Source/Core/Core/LUA/Lua.cpp#L1614
+		"ReadValue8",
+		"ReadValue16",
+		"ReadValue32",
+		"ReadValueFloat",
+		"ReadValueString",
+		"GetPointerNormal",
+
+		"WriteValue8",
+		"WriteValue16",
+		"WriteValue32",
+		"WriteValueFloat",
+		"WriteValueString",
+
+		"GetGameID",
+		"GetScriptsDir",
+
+		"PressButton",
+		"ReleaseButton",
+		"SetMainStickX",
+		"SetMainStickY",
+		"SetCStickX",
+		"SetCStickY",
+		"GetMainStick",
+		"GetCStick",
+
+		"GetWiimoteKey", // Xander: wiimote + extension controls
+		"GetWiimoteExtension",
+		"GetButtons",
+		"SetIRX",
+		"SetIRY",
+		"SetIRBytes",
+		"GetIR",
+		"SetAccelX",
+		"SetAccelY",
+		"SetAccelZ",
+		"GetAccel",
+		"SetNunchukAccelX",
+		"SetNunchukAccelY",
+		"SetNunchukAccelZ",
+		"GetNunchukAccel",
+
+		"SaveState",
+		"LoadState",
+
+		"GetFrameCount",
+		"GetInputFrameCount",
+		"MsgBox",
+		
+		"SetScreenText",
+		"PauseEmulation",
+		"SetInfoDisplay", 
+		"RenderText", // Xander: directly control text rendering
+		"CancelScript",
+
+		// added by luckytyphlosion
+		"SetFrameAndAudioDump",
+
+		// callbacks
+		"onScriptStart",
+		"onScriptCancel",
+		"onScriptUpdate",
+		"onStateLoaded",
+		"onStateSaved",
+	]
+}

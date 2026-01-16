@@ -2,6 +2,8 @@ local core = require 'NSMBWii_Core'
 dofile('Studio\\Value Lookup Table.lua')  --value lookup table and input binds are stored here
 
 --init
+local reg = core.game_id_rev().Region
+
 local tilt = 512
 local twirlTimer = 0
 
@@ -26,39 +28,39 @@ local totalLoopNum = 0
 local messageNum = 0
 local messageTimer = 0
 
+local file
+local scriptFirstFrame
+local lastFrame
+local offset
+local index = 0
+local round = 0
+local heldButtons = ''
+
+local failed = false
+local loadDoc = ''
+local writeValueList = ''
+local lockedWriteValueList = ''
+local macroDoc = ''
+
+local nunchuckaddr = core.syms.__rvl_wpadcb[reg] + 0x840 --__rvl_wpadcb[P1].info.attach
+local nunchuck
+
 function onScriptStart()
-  studioSettingsFile = io.open('Studio\\Studio Config.toml', 'r+')  --find the file currently opened by Studio and use it
+  local studioSettingsFile = io.open('Studio\\Studio Config.toml', 'r+')  --find the file currently opened by Studio and use it
   local _, _, readFileName = string.find(tostring(studioSettingsFile:read('*all')), 'LastFileName = "(.-)"')
   studioSettingsFile:close()
-  
+
   _, _, root = string.find(readFileName, '(.*\\)')
-  
+
   file = io.open(readFileName, 'r')
   messageSend(string.format('Reading file: %s', readFileName), 0xD2691E)
-  
+
   scriptFirstFrame = GetFrameCount()
   lastFrame = scriptFirstFrame
   offset = scriptFirstFrame
-  index = 0
-  round = 0
-  heldButtons = ''
-  
-  failed = false
-  loadDoc = ''
-  writeValueList = ''
-  lockedWriteValueList = ''
-  macroDoc = ''
-  
-  if ReadValueString(3, 1) == 'E' then --Determines whether playing with or without nunchuck, which changes where tilt controlls are sent
-    nunchuckaddr = '0x8039FBA3'
-  elseif ReadValueString(3, 1) == 'J' then
-    nunchuckaddr = '0x8039F923'
-  end
-  if ReadValue8(nunchuckaddr) == 0 then
-    nunchuck = false
-  else
-    nunchuck = true
-  end
+
+  --Determines whether playing with or without nunchuck, which changes where tilt controlls are sent
+  nunchuck = ReadValue32(nunchuckaddr) ~= 0
 end
 
 function onScriptCancel()
@@ -75,10 +77,10 @@ function onScriptUpdate()  --called every input call (3-4 times per frame)
     if initComplete and index > 0 then
       currLine = findLineFromIndex()  --finds the current input line and records a bunch of data for later use
     end
-    
+
     --currLineProgress = index - currLine[2] + currLine[1]
     lastFrame = GetFrameCount()
-    
+
     --display TAS info
     RenderText(string.format('%5.0f', lineNumber), 450, 29, 0xF1FA8C, 22)
     RenderText(string.format('%4.0f/%.0f,', index-currLine[2]+currLine[1], currLine[1]), 550, 29, 0xFFB86C, 22)
@@ -86,7 +88,7 @@ function onScriptUpdate()  --called every input call (3-4 times per frame)
     if loopNum ~= 0 then
       messageSend(string.format('Repeat %.0f/%s', loopNum, totalLoopNum), 0x00FFFF)
     end
-    
+
     --RenderText(string.format('Load Doc: %s', loadDoc), 500, 704, 0xD2691E, 11)
   elseif round == 1 then
     prevLoadInfo = {getLoadInfo(), prevLoadInfo[1]}
@@ -97,8 +99,8 @@ function onScriptUpdate()  --called every input call (3-4 times per frame)
     if lockedWriteValueList ~= '' then messageSend(lockedWriteValueList, 0xD2691E) end
     round = 0
   end
-  
-  
+
+
   local e = 0
   local thisFrameWriteList = lockedWriteValueList .. writeValueList
   while true do  --write all the queued values for this frame
@@ -107,14 +109,14 @@ function onScriptUpdate()  --called every input call (3-4 times per frame)
     writeValue(valueType, address, valueToWrite)
     e = endLine
   end
-  
-  
+
+
   if index < 1 then  --prevents the script from playing inputs before the input file starts
     currLine = {0, 0, ''}
     tilt = 512
     subFrame = false
   end
-    
+
   if subFrame then 
     --messageSend(string.format('Sub-Frame line: %s, %s, %s', subFrameInputs[1], subFrameInputs[2], subFrameInputs[3]), 0x00FFFF)
     if inputCall < 3 then
@@ -139,7 +141,6 @@ function onScriptUpdate()  --called every input call (3-4 times per frame)
 end
 
 function findLineFromIndex()
-
   if fileIsUpdated() or GetFrameCount()-lastFrame ~= 1 or index == 1 then
     --messageSend('File indexed from start', 0x00FF00)
     startLinePos = 1
@@ -151,15 +152,15 @@ function findLineFromIndex()
     tilt = 512
     heldButtons = ''
     lockedWriteValueList = ''
-    
+
     rawLine = ''
     allowCheats = true
-    
+
     lineNumber = 0
     pauseLineAdvance = 0
     loopNum = 0
     totalLoopNum = 0
-  
+
     file:seek('set', 0)
     rawFile = tostring(file:read('*all')) .. '\nset, pauseLineAdvance,1\n   0'  --add an extra line of length 0 at the end to prevent the script from crashing in some situations
   --else  --if file will continue being indexed from where it left off last frame
@@ -167,11 +168,11 @@ function findLineFromIndex()
   end
   subFrame = false
   subFrameInputs = {'', '', ''}
-  
+
   --debug display file
   --RenderText('File: \n' .. string.sub(rawFile, startLinePos-150, startLinePos+1000), 800, 29, 0xD2691E, 11)
   --messageSend(string.format('Index: %.0f', index), 0xFF00FF) 
-  
+
   while index > totalFramesAtIndex do  --searches through the input file until the current line is reached
     endLinePos = string.find(rawFile,'\n', startLinePos)
     if endLinePos == nil then  --if the end of the file has been reached, set endLinePos to the end of the file to prevent out of range errors
@@ -189,7 +190,7 @@ function findLineFromIndex()
     if pauseLineAdvance == 0 then
       lineNumber = lineNumber + 1
     end
-    
+
     if inputDuration ~= nil then  --if current line is an input line
       totalFramesAtIndex = totalFramesAtIndex + inputDuration
       currLineProgress = index - totalFramesAtIndex + inputDuration
@@ -198,7 +199,7 @@ function findLineFromIndex()
         twirlTimer = 5 - currLineProgress
       end
     --elseif string.sub(rawLine, 1, 1) == '#' then  --if the current line is a comment
-    
+
     elseif endLinePos-startLinePos > 2 and string.sub(rawLine, 1, 1) ~= '#' then  --line is a command
       if index == totalFramesAtIndex+1 then processCommand() end
       processGlobalCommand()
@@ -207,7 +208,7 @@ function findLineFromIndex()
         return returnData  --simulate finding the current input
       end
     end
-    
+
     if endLinePos == rawFile.len(rawFile) then  --exit the loop if the end of the file has been reached, else calcualate the next line's starting position
       break
     else
@@ -408,7 +409,7 @@ function convertLineToInputs(line)
   line = line .. heldButtons
   line = string.gsub(line, ',', '')  --remove commas from input line for easier processing
   local inputNum = #line
-  
+
   for i=1,inputNum do
     local inputStep = string.sub(line,i,i)
     if string.find(validButtons, inputStep) == nil then  --don't crash dolphin if an invalid input is given
@@ -497,7 +498,7 @@ function doLoadManagement()
     --messageSend('Wrote to LoadDoc Init', 0x00FFFF)
     loadIDStartPos, loadIDEndPos = string.find(loadDoc, string.format('%s,', loadID), 1, true)
   end
-  
+
   local recordedStartFrame = tonumber(string.sub(loadDoc, loadIDEndPos+2, loadIDEndPos+8))
   local endLoadFrame = tonumber(string.sub(loadDoc, loadIDEndPos+11, loadIDEndPos+17))
 
@@ -505,16 +506,16 @@ function doLoadManagement()
     local addToLoadDoc = string.format('%s, %7.0f', loadID, startLoadFrame)
     loadDoc = string.format('%s%s%s',string.sub(loadDoc, 1, loadIDStartPos-1), addToLoadDoc, string.sub(loadDoc, loadIDStartPos+#addToLoadDoc, -1))
     --messageSend('Wrote to LoadDoc 0', 0x00FFFF)
-    
+
     if startLoadFrame ~= recordedStartFrame then  --reset loadDoc if previous inputs changed and are currently in the load
       loadDoc = string.format('%s%7.0f%s',string.sub(loadDoc, 1, loadIDEndPos+10), 0, string.sub(loadDoc, loadIDEndPos+18, -1))
       --messageSend('Wrote to LoadDoc 1', 0x00FFFF)
     end
-    
+
     if index == totalFramesAtIndex + 1 or GetFrameCount() == scriptFirstFrame+1 then  --make the script think it wasn't loading on the frame before this command to prevent ds issues in some situations
       prevLoadInfo[2] = false
     end
-    
+
     if prevLoadInfo[1] == false and prevLoadInfo[2] == true then  --load end detected
       loadDoc = string.format('%s%7.0f%s',string.sub(loadDoc, 1, loadIDEndPos+10), index-1, string.sub(loadDoc, loadIDEndPos+18, -1))
       --messageSend('Wrote to LoadDoc 2', 0x00FFFF)
@@ -527,7 +528,7 @@ function doLoadManagement()
     return
   end
   --index > endLoadFrame+1
-  
+
   if startLoadFrame ~= recordedStartFrame then  --update loadDoc if previous inputs changed and TAS is after the load. Prone to desyncs if load length changes after making an earlier edit and the load is not replayed to reindex its length, so be careful!
     loadDoc = string.format('%s%7.0f%s',string.sub(loadDoc, 1, loadIDEndPos+10), 0, string.sub(loadDoc, loadIDEndPos+18, -1))
     --messageSend('Wrote to LoadDoc 3', 0x00FFFF)
@@ -551,20 +552,20 @@ function doReadManagement()
       isInMainFile = false
       loadDoc = loadDoc .. string.format('\n%s, %7.0f, %7.0f', readCommandFileName, startReadFrame, 0)
       readCommandFile = io.open(readCommandFileName, 'r')
-      
+
       local textToImportToFile = string.gsub(tostring(readCommandFile:read('*all')), '%w LoadDoc', '#')  --remove problematic commands. Comment any trailing arguments
       --textToImportToFile = string.gsub(textToImportToFile, 'IndexMode', '#')
-      
+
       rawFile = string.format('%s%s\nEnd Read, %s%s',string.sub(rawFile, 1, endLinePos),textToImportToFile,readCommandFileName,string.sub(rawFile, endLinePos, -1))
-      
-      
+
+
       if index == startReadFrame then 
         lineNumber = lineNumber+1
         heldButtons = ''  --reset some values to avoid desyncs
         tilt = 512
         macroDoc = ''
       end
-      
+
       readCommandFile:close()
       messageSend(string.format('Read file: %s', readCommandFileName), 0xD2691E)
     else
@@ -577,7 +578,7 @@ function doReadManagement()
   local recordedStartFrame = tonumber(string.sub(loadDoc, loadFileNameEndPos+2, loadFileNameEndPos+8))
   local addToLoadDoc = string.format('%s, %7.0f', readCommandFileName, startReadFrame)
   loadDoc = string.format('%s%s%s',string.sub(loadDoc, 1, loadDocumentationStartPos-1), addToLoadDoc, string.sub(loadDoc, loadDocumentationStartPos+#addToLoadDoc, -1))
-  
+
   local endReadFrame = tonumber(string.sub(loadDoc, loadFileNameEndPos+11, loadFileNameEndPos+17))
   if endReadFrame == 0 or index < endReadFrame then  --if End Read has not previously been called or input index is during the read
     pauseLineAdvance = 1
@@ -592,10 +593,10 @@ function doReadManagement()
     end
     --insert the Read file and a line 'End Read, [file ID]'
     readCommandFile = io.open(readCommandFileName, 'r')
-    
+
     local textToImportToFile = string.gsub(tostring(readCommandFile:read('*all')), '%w LoadDoc', '#')  --remove problematic commands
     --textToImportToFile = string.gsub(textToImportToFile, 'IndexMode', '#IndexMode')
-    
+
     rawFile = string.format('%s%s\nEnd Read, %s%s',string.sub(rawFile, 1, endLinePos),textToImportToFile,readCommandFileName,string.sub(rawFile, endLinePos, -1))
 
     readCommandFile:close()
@@ -679,7 +680,7 @@ function searchLookupTable(input)
   if string.find(regionSpecificList, input) ~= nil then
     input = input .. core.game_id_rev().Region
   end
-  
+
   return lookupTable[input]
 end
 
