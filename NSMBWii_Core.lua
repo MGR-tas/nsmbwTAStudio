@@ -33,6 +33,16 @@ local syms = {
     P = 0x8042a240, K = 0x80436c00,
     W = 0x80435000
   },
+  m_instance__10dScCrsin_c = {
+    E = 0x8042a1b4, J = 0x80429ed4,
+    P = 0x8042a494, K = 0x80436e54,
+    W = 0x8042fa24
+  },
+  mFader__8mFader_c = {
+    E = 0x8042A440, J = 0x8042A160,
+    P = 0x8042a720, K = 0x804370e0,
+    W = 0x804354e0
+  },
 }
 
 function core.game_id_rev()
@@ -195,7 +205,6 @@ function object.list()
   local fullObjList = ''
   local compactObjList = ''
   local itemSearchList = ''
-  local loadCheckObjs = 0
   while objName[ObjectNum] ~= nil do
     local j = 0
     while objName[ObjectNum] == objName[ObjectNum + j] do
@@ -206,13 +215,6 @@ function object.list()
         itemSearchList = itemSearchList .. string.format('\n (%.4f, %.4f)', ReadValueFloat(objAddr[ObjectNum + j] + 0xC4), ReadValueFloat(objAddr[ObjectNum + j] + 0xC8)) .. '\n\n'
       end
       j = j + 1
-    end
-    local instance = stats.misc().current_instance
-    if objName[ObjectNum] == 'YES_NO_WINDOW' or objName[ObjectNum] == 'PLAYER' or objName[ObjectNum] == 'WM_MAP' or objName[ObjectNum] == 'WORLD_9_DEMO' then
-      loadCheckObjs = loadCheckObjs + 1
-    --I'm sorry
-    elseif (objName[ObjectNum] == 'SELECT_CURSOR' and instance == 'sequenceBGTexture') or objName[ObjectNum] == 'BOOT' or (string.find(objName[ObjectNum], 'CRSIN') ~= nil and instance ~= '' and instance ~= '01-40' and instance ~= '01-42' and instance ~= 'MB') then
-      loadCheckObjs = loadCheckObjs + 2
     end
     if ReadValue8(objAddr[ObjectNum] + 0xE) == 2 then
       compactObjList = compactObjList .. objName[ObjectNum] .. ' x' .. j .. '\n'
@@ -225,7 +227,6 @@ function object.list()
     fullObjList = fullObjList,
     compactObjList = compactObjList,
     itemSearchList = itemSearchList,
-    loadCheckObjs = loadCheckObjs,     --used for loadless input import/export
     ObjectNum = ObjectNum-1
   }
 

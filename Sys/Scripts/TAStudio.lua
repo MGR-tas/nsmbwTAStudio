@@ -17,6 +17,7 @@ local returnData = {0, 0, ''}
 
 local initComplete = false
 local prevLoadInfo = {true, true}
+local justExitedLoad = 0
 local root = ''
 
 local subFrame = false
@@ -40,7 +41,6 @@ local failed = false
 local loadDoc = ''
 local writeValueList = ''
 local lockedWriteValueList = ''
-local macroDoc = ''
 
 local nunchuckaddr = core.syms.__rvl_wpadcb[reg] + 0x840 --__rvl_wpadcb[P1].info.attach
 local nunchuck
@@ -72,6 +72,7 @@ function onScriptUpdate()  --called every input call (3-4 times per frame)
     inputCall = 1
     round = 1
     messageNum = 0
+    justExitedLoad = 0
     writeValueList = ''
     index = GetFrameCount() - offset
     if initComplete and index > 0 then
@@ -148,7 +149,6 @@ function findLineFromIndex()
     totalFramesAtIndex = 0
     currLineProgress = 0
     isInMainFile = true
-    macroDoc = ''
     tilt = 512
     heldButtons = ''
     lockedWriteValueList = ''
@@ -201,7 +201,7 @@ function findLineFromIndex()
     --elseif string.sub(rawLine, 1, 1) == '#' then  --if the current line is a comment
 
     elseif endLinePos-startLinePos > 2 and string.sub(rawLine, 1, 1) ~= '#' then  --line is a command
-      if index == totalFramesAtIndex+1 then processCommand() end
+      if index == totalFramesAtIndex+1+justExitedLoad then processCommand() end
       processGlobalCommand()
       if exitLoop then
         exitLoop = false
@@ -241,7 +241,7 @@ function processGlobalCommand()
     local _, _, valueType, address, valueToWrite, lock = string.find(arg2 .. ',','(.-),%s*(.-),%s*(.-),%s*(%d?)')
     if address == nil then  --prevent the script from crashing if the line is formatted incorrectly
       messageSend(string.format('Bad Write Line "%s"', rawLine), 0xFF0000)
-    elseif index == totalFramesAtIndex+1 or lock == '1' then
+    elseif index == totalFramesAtIndex+1+justExitedLoad or lock == '1' then
       local writeAddr = convertStringToAddress(address)
       if lock == '1' and writeAddr ~= 0 then
         lockedWriteValueList = string.format('%s%s, 0x%X, %s\n', lockedWriteValueList, valueType, writeAddr, valueToWrite)
@@ -261,7 +261,6 @@ function processGlobalCommand()
     isInMainFile = true
     tilt = 512
     heldButtons = ''
-    macroDoc = ''
     local readCommandFileName = arg2
     local loadDocumentationStartPos, loadFileNameEndPos = string.find(loadDoc, string.format('%s,', readCommandFileName), 1, true)
     loadDoc = string.format('%s%7.0f%s',string.sub(loadDoc, 1, loadFileNameEndPos+10), totalFramesAtIndex+1, string.sub(loadDoc, loadFileNameEndPos+18, -1))
@@ -346,28 +345,6 @@ function processGlobalCommand()
       pauseLineAdvance = tonumber(val)
     end
     return
-  elseif arg1 == 'macro' or arg1 == 'Macro' then
-    local _, endMacroPos, macro = string.find(rawFile, '(.-\n[Ee]nd[Mm]acro\n)', startLinePos)
-    if macro == nil then
-      messageSend('Macro declaration failed! No "EndMacro" found.', 0xFF0000)
-      return
-    end
-    if string.find(macroDoc, rawLine) == nil then  --ignore any subsequent macro declarations with the same name
-      macroDoc = string.format('%s%s\n', macroDoc, macro)
-    else
-      messageSend(string.format('Macro declaration failed! A macro already has this name.\n%s', macro), 0xFF0000)
-    end
-    local _, subs = string.gsub(macro, '\n', '\n')
-    if isInMainFile then lineNumber = lineNumber + subs - 1 end
-    endLinePos = endMacroPos  --move the reading position to after the macro
-    return
-  elseif string.find(macroDoc, arg1) ~= nil then  --check if this line is a known macro callback
-    pauseLineAdvance = 1
-    local _, macroStartPos = string.find(macroDoc, arg1)
-    local macro = string.sub(macroDoc, macroStartPos+2, string.find(macroDoc, '[Ee]nd[Mm]acro', macroStartPos)-1)
-    rawFile = string.format('%sset, pauseLineAdvance,1\nRepeat, %s\n%s\nendrepeat\nset, pauseLineAdvance,0%s', string.sub(rawFile, 1, startLinePos-1), arg2, macro, string.sub(rawFile, endLinePos, -1))
-    endLinePos = startLinePos-1
-    return
   end
 end
 
@@ -426,14 +403,10 @@ function convertLineToInputs(line)
 end
 
 function getLoadInfo()
-  if core.object.list().ObjectNum == 1 then  --cannot be predicted; abort
-    return prevLoadInfo[1]
+  if ReadValue32(GetPointerNormal(core.syms.mFader__8mFader_c[core.game_id_rev().Region], 4)) == 0 or ReadValue32(core.syms.m_instance__10dScCrsin_c[core.game_id_rev().Region]) ~= 0 then
+    return true  --is loading
   end
-  if core.object.list().loadCheckObjs < 2 then  --is loading
-    return true
-  else  --is not loading
-    return false
-  end
+  return false  --is not loading
 end
 
 function writeValue(valueType, address, valueToWrite)
@@ -475,9 +448,9 @@ function messageSend(messageText, color)
 end
 
 function setIndex()
-  if prevLoadInfo[1] == false and prevLoadInfo[2] == true then
+  if (prevLoadInfo[1] == false and prevLoadInfo[2] == true) or ReadValue32(core.syms.m_instance__10dScCrsin_c[core.game_id_rev().Region]) ~= 0 then
     index = 1
-    offset = GetFrameCount()
+    offset = GetFrameCount() - 1
     messageSend(string.format('Offset updated automatically to %.0f', offset), 0xD2691E)
     initComplete = true
     currLine = findLineFromIndex()
@@ -517,9 +490,10 @@ function doLoadManagement()
     end
 
     if prevLoadInfo[1] == false and prevLoadInfo[2] == true then  --load end detected
-      loadDoc = string.format('%s%7.0f%s',string.sub(loadDoc, 1, loadIDEndPos+10), index-1, string.sub(loadDoc, loadIDEndPos+18, -1))
+      loadDoc = string.format('%s%7.0f%s',string.sub(loadDoc, 1, loadIDEndPos+10), index-2, string.sub(loadDoc, loadIDEndPos+18, -1))
       --messageSend('Wrote to LoadDoc 2', 0x00FFFF)
-      totalFramesAtIndex = totalFramesAtIndex + index - startLoadFrame
+      totalFramesAtIndex = totalFramesAtIndex + index - startLoadFrame - 1
+      justExitedLoad = 1
     else
       messageSend('Waiting for load to end...', 0xD2691E)
       exitLoop = true
@@ -563,7 +537,6 @@ function doReadManagement()
         lineNumber = lineNumber+1
         heldButtons = ''  --reset some values to avoid desyncs
         tilt = 512
-        macroDoc = ''
       end
 
       readCommandFile:close()
@@ -585,7 +558,6 @@ function doReadManagement()
     if index == startReadFrame then
       heldButtons = ''  --reset some values to avoid desyncs
       tilt = 512
-      macroDoc = ''
     end
     isInMainFile = false
     if startReadFrame ~= recordedStartFrame then  --update loadDoc if previous inputs changed

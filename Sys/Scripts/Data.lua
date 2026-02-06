@@ -1,7 +1,6 @@
 local text = ''
 local prevFrameText = ''
 local lastFrame = 0
-local isNowLoading = true
 local core = require 'NSMBWii_Core'
 local objList = core.object.list()
 local thisFrameFlags = {}
@@ -227,16 +226,11 @@ local function isPressed(button, inputs)  --copied from the input import/export 
 end
 
 function getLoadInfo()
-  if objList.ObjectNum == 1 then  --cannot be predicted; abort
-    return isNowLoading
+  if ReadValue32(GetPointerNormal(core.syms.mFader__8mFader_c[core.game_id_rev().Region], 4)) == 0 or ReadValue32(core.syms.m_instance__10dScCrsin_c[core.game_id_rev().Region]) ~= 0 then
+    return true  --is loading
   end
-  if objList.loadCheckObjs < 2 then  --is loading
-    return true
-  else  --is not loading
-    return false
-  end
+  return false  --is not loading
 end
-
 
 function bin(n)
   local r = ''
@@ -340,11 +334,10 @@ end
 
 
 function onScriptUpdate()
-  local p1   = core.players.P1()
+  local p1   = core.players.player(1)
   local ps   = p1.Misc[1]
   local rng  = ReadValue32(core.rng.addr)
   objList = core.object.list()
-  isNowLoading = getLoadInfo()
 
   if GetFrameCount() ~= lastFrame then
     lastFrameFlags = thisFrameFlags
@@ -364,7 +357,8 @@ function onScriptUpdate()
   if core.stats.misc().switch_timer ~= 0 then
     text = text .. string.format('\nSwitch Timer : %.0f', core.stats.misc().switch_timer)
   end
-  --text = string.format('%s\nLoading: %s', text, isNowLoading)
+  --text = string.format('%s\nLoading: %s', text, getLoadInfo())
+  --text = string.format('%s\n  Crsin: %d', text, ReadValue32(core.syms.m_instance__10dScCrsin_c[core.game_id_rev().Region]))
 
 --Input-State Change
 --Useful for level banner dismissal - mash 2/A and this will show the frame that the banner got dismissed. Then go back and press 2/A 3f before the number shown by this (also dolphin's turbo is bad so use a script to mash (Alternate.lua) or just experiment with pressing 2/A on a few different frames to see which one is optimal). Automatically hidden if you're in-level.
@@ -396,7 +390,7 @@ function onScriptUpdate()
   --text = string.format('%s\n\nSet State: %s', text, setState(0x4, 0))
 
   local collisionText = '\n'
-  local flags = core.players.P1().Misc[6]
+  local flags = core.players.player(1).Misc[6]
   if isPressed(1, flags) then
     collisionText = collisionText .. 'Ground '
     if isPressed (0x1000000, flags) then
