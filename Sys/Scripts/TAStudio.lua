@@ -6,6 +6,7 @@ local reg = core.game_id_rev().Region
 
 local tilt = 512
 local twirlTimer = 0
+local IR = {460, 490}
 
 local lineNumber = 0
 local pauseLineAdvance = 0
@@ -115,6 +116,8 @@ function onScriptUpdate()  --called every input call (3-4 times per frame)
   if index < 1 then  --prevents the script from playing inputs before the input file starts
     currLine = {0, 0, ''}
     tilt = 512
+    IR[0] = 460
+    IR[1] = 490
     subFrame = false
   end
 
@@ -135,6 +138,8 @@ function onScriptUpdate()  --called every input call (3-4 times per frame)
   else
     SetAccelY(tilt, 4)
   end
+  SetIRX(IR[0], 4)
+  SetIRY(IR[1], 4)
   if twirlTimer ~= 0 then  --set accZ according to twirl timer
     SetAccelZ(512*(twirlTimer-1), 4)
   end
@@ -150,6 +155,8 @@ function findLineFromIndex()
     currLineProgress = 0
     isInMainFile = true
     tilt = 512
+    IR[0] = 460
+    IR[1] = 490
     heldButtons = ''
     lockedWriteValueList = ''
 
@@ -250,6 +257,15 @@ function processGlobalCommand()
       end
     end
     return
+  elseif arg1 == 'IR' then  --set IR values
+    local _, _, IRx, IRy = string.find(arg2 .. ',','(.-),%s*(.-),')
+    if tonumber(IRx) == nil or tonumber(IRy) == nil then
+      messageSend(string.format('Invalid IR value "%s"', arg2), 0xFF0000)
+      return
+    end
+    IR[0] = tonumber(IRx)
+    IR[1] = tonumber(IRy)
+    return
   elseif arg1 == 'Unlock' then
     lockedWriteValueList = ''
     return
@@ -260,6 +276,8 @@ function processGlobalCommand()
     pauseLineAdvance = 0
     isInMainFile = true
     tilt = 512
+    IR[0] = 460
+    IR[1] = 490
     heldButtons = ''
     local readCommandFileName = arg2
     local loadDocumentationStartPos, loadFileNameEndPos = string.find(loadDoc, string.format('%s,', readCommandFileName), 1, true)
@@ -537,6 +555,8 @@ function doReadManagement()
         lineNumber = lineNumber+1
         heldButtons = ''  --reset some values to avoid desyncs
         tilt = 512
+        IR[0] = 460
+        IR[1] = 490
       end
 
       readCommandFile:close()
@@ -558,6 +578,8 @@ function doReadManagement()
     if index == startReadFrame then
       heldButtons = ''  --reset some values to avoid desyncs
       tilt = 512
+      IR[0] = 460
+      IR[1] = 490
     end
     isInMainFile = false
     if startReadFrame ~= recordedStartFrame then  --update loadDoc if previous inputs changed
