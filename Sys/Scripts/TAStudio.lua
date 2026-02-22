@@ -46,6 +46,177 @@ local lockedWriteValueList = ''
 local nunchuckaddr = core.syms.__rvl_wpadcb[reg] + 0x840 --__rvl_wpadcb[P1].info.attach
 local nunchuck
 
+local globalCommands = {
+  ["Tilt"] = function()  --Set Tilt controls
+    if tonumber(arg2) == nil then
+      messageSend(string.format('Invalid Tilt value "%s"', arg2), 0xFF0000)
+    else
+      tilt = tonumber(arg2)
+    end
+  end,
+  ["Hold"] = function()  --Start holding specified buttons
+    heldButtons = arg2
+  end,
+  ["Write"] = function()  --Set a memory address to a specific value
+    if allowCheats then
+      local _, _, valueType, address, valueToWrite, lock = string.find(arg2 .. ',','(.-),%s*(.-),%s*(.-),%s*(%d?)')
+      if address == nil then  --prevent the script from crashing if the line is formatted incorrectly
+        messageSend(string.format('Bad Write Line "%s"', rawLine), 0xFF0000)
+      elseif index == totalFramesAtIndex+1+justExitedLoad or lock == '1' then
+        local writeAddr = convertStringToAddress(address)
+        if lock == '1' and writeAddr ~= 0 then
+          lockedWriteValueList = string.format('%s%s, 0x%X, %s\n', lockedWriteValueList, valueType, writeAddr, valueToWrite)
+        elseif writeAddr ~= 0 then
+          writeValueList = string.format('%s%s, 0x%X, %s\n', writeValueList, valueType, writeAddr, valueToWrite)  --add values to write this frame to a list. Write them during the main loop so they get updated every input call
+        end
+      end
+    end
+  end,
+  ["IR"] = function()  --Set IR values
+    local _, _, IRx, IRy = string.find(arg2 .. ',','(.-),%s*(.-),')
+    if tonumber(IRx) == nil or tonumber(IRy) == nil then
+      messageSend(string.format('Invalid IR value "%s"', arg2), 0xFF0000)
+    else
+      IR[0] = tonumber(IRx)
+      IR[1] = tonumber(IRy)
+    end
+  end,
+  ["Unlock"] = function()  --Clear the locked values list
+    lockedWriteValueList = ''
+  end,
+  ["Read"] = function()  --manage read files
+    doReadManagement()
+  end,
+  ["EndRead"] = function()  --record endReadFrame so that we don't have to reindex the file after this
+    pauseLineAdvance = 0
+    isInMainFile = true
+    tilt = 512
+    IR[0] = 460
+    IR[1] = 490
+    heldButtons = ''
+    local readCommandFileName = arg2
+    local loadDocumentationStartPos, loadFileNameEndPos = string.find(loadDoc, string.format('%s,', readCommandFileName), 1, true)
+    loadDoc = string.format('%s%7.0f%s',string.sub(loadDoc, 1, loadFileNameEndPos+10), totalFramesAtIndex+1, string.sub(loadDoc, loadFileNameEndPos+18, -1))
+  end,
+  ["Insert Load"] = function()  --pause replaying inputs until the next load ends
+    doLoadManagement()
+  end,
+  ["Manual"] = function()  --Manually set the replay first frame
+    if tonumber(arg2) == nil then
+      messageSend(string.format('Invalid Offset "%s"', rawLine), 0xFF0000)
+    else
+      offset = tonumber(arg2)
+      index = GetFrameCount() - offset
+      initComplete = true
+      messageSend(string.format('Offset updated manually to %.0f', offset), 0x00FF00)
+    end
+  end,
+  ["Enforce Legal"] = function()  --Prevents the use of cheats for the rest of the file
+    allowCheats = false
+  end,
+  ["Repeat"] = function()  --Repeat the inputs between this command and an EndRepeat command
+    local nextRepeatLineStartPos = endLinePos
+    local afterNextRepeatLine = endLinePos
+    local repeatEndPos = endLinePos
+    local afterCommand = endLinePos
+    while repeatEndPos ~= nil do
+      nextRepeatLineStartPos, afterNextRepeatLine = string.find(rawFile, '\nRepeat', afterNextRepeatLine)
+      repeatEndPos, afterCommand = string.find(rawFile, '\nEndRepeat', afterCommand)
+      if nextRepeatLineStartPos == nil then break end
+      if repeatEndPos < nextRepeatLineStartPos then break end
+    end
+    if repeatEndPos == nil then
+      messageSend(string.format('No "EndRepeat" found!  %s', rawLine), 0xFF0000)
+    else
+      local arg2 = tonumber(arg2)
+      if arg2 == 0 or arg2 == nil then
+        arg2 = 1
+      end
+      rawFile = string.format('%sEndRepeat,%d,%d,%d,%d%s', string.sub(rawFile, 1, repeatEndPos), endLinePos, lineNumber, arg2-1, arg2, string.sub(rawFile, string.find(rawFile, '\n', afterCommand), -1))
+      loopNum = 1
+      totalLoopNum = arg2
+    end
+  end,
+  ["EndRepeat"] = function()  --Loop back to the associated repeat command using the info automatically generated
+    if arg2 == '' then
+      messageSend(string.format('"EndRepeat" found on line %d with no associated Repeat command!', lineNumber), 0xFF0000)
+    else
+      _, _, arg2, arg3, arg4, arg5 = string.find(arg2, '(%d-),(%d-),(%d-),(%d+)')
+      if arg4 ~= '0' then
+        rawFile = string.format('%sEndRepeat,%d,%d,%d,%d%s', string.sub(rawFile, 1, startLinePos-1), arg2, arg3, tonumber(arg4)-1, arg5, string.sub(rawFile, endLinePos, -1))
+        loopNum = arg5-arg4+1
+        totalLoopNum = arg5
+        endLinePos = arg2
+        if isInMainFile then lineNumber = arg3 end
+      else
+        loopNum = 0
+        totalLoopNum = 0
+      end
+    end
+  end,
+  ["SubFrame"] = function()  --Experimental thing which lets you press different buttons on different input calls. Seems useless.
+    totalFramesAtIndex = totalFramesAtIndex + 1
+    currLineProgress = 0
+    inputDuration = 1
+    lineInputs = ''
+    if index == totalFramesAtIndex then
+      subFrame = true
+      local _, _, call1, call2, call3 = string.find(arg2 .. ',,,', '(.-),(.-),(.-),')
+      if call2 == '' then
+        call2 = call1
+      end
+      if call3 == '' then
+        call3 = call2
+      end
+      subFrameInputs = {call1, call2, call3}
+    end
+  end,
+  ["set"] = function()  --Auto-generated command to pause or resume line advance
+    if isInMainFile then
+      local _, _, var, val = string.find(arg2, '(%w+),(%w+)')
+      if var == 'lineNumber' then
+        lineNumber = tonumber(val)
+      elseif var == 'pauseLineAdvance' then
+        pauseLineAdvance = tonumber(val)
+      end
+    end
+  end,
+  default = function()  -- If nothing matches
+  end
+}
+
+local localCommands = {
+  ["Save LoadDoc"] = function()  --Save current load documentation
+    local writeFileName
+    if arg2 == '' then
+      writeFileName = string.format('Studio\\LoadDocs\\%s.txt',ReadValueString(0x80D20F04, 99))
+    elseif string.sub(arg2, -4) == '.txt' then
+      writeFileName = string.format('Studio\\LoadDocs\\%s', arg2)
+    else
+      writeFileName = string.format('Studio\\LoadDocs\\%s.txt', arg2)
+    end
+    writeFile = io.open(writeFileName, "w+")
+    writeFile:write(string.format('Offset: %.0f\n%s', offset, loadDoc))
+    writeFile:close()
+    messageSend(string.format('LoadDoc Saved Successfully!  %s', writeFileName), 0x00FF00)
+  end,
+  ["Open LoadDoc"] = function()  --Open premade load documentation
+    openLoadDoc()
+  end,
+  ["Delete"] = function()  --Deletes the object at the specified address
+    if allowCheats then
+      local deleteAddr = convertStringToAddress(arg2)
+      if deleteAddr ~= 0 then
+        arg2 = ReadValueString(ReadValue32(deleteAddr + 0x6C), 0x100)
+        messageSend(string.format('Deleted "%s" (0x%X)', arg2, deleteAddr), 0x00FF00)
+        WriteValue8(deleteAddr+0xB, 2)
+      end 
+    end
+  end,
+  default = function()  -- If nothing matches
+  end
+}
+
 function onScriptStart()
   local studioSettingsFile = io.open('Studio\\Studio Config.toml', 'r+')  --find the file currently opened by Studio and use it
   local _, _, readFileName = string.find(tostring(studioSettingsFile:read('*all')), 'LastFileName = "(.-)"')
@@ -208,8 +379,14 @@ function findLineFromIndex()
     --elseif string.sub(rawLine, 1, 1) == '#' then  --if the current line is a comment
 
     elseif endLinePos-startLinePos > 2 and string.sub(rawLine, 1, 1) ~= '#' then  --line is a command
-      if index == totalFramesAtIndex+1+justExitedLoad then processCommand() end
-      processGlobalCommand()
+      --Retrieve the command from the global command table and call it
+      local action = globalCommands[arg1] or globalCommands.default
+      action()
+      if index == totalFramesAtIndex+1+justExitedLoad then 
+        --Retrieve the command from the local command table and call it
+        action = localCommands[arg1] or localCommands.default
+        action()
+      end
       if exitLoop then
         exitLoop = false
         return returnData  --simulate finding the current input
@@ -230,174 +407,6 @@ function findLineFromIndex()
     totalFramesAtIndex,
     lineInputs
   }
-end
-
-function processGlobalCommand()
-  if arg1 == 'Tilt' then  --set Tilt controls when a 'Tilt' command is processed
-    if tonumber(arg2) == nil then
-      messageSend(string.format('Invalid Tilt value "%s"', arg2), 0xFF0000)
-      return
-    else
-      tilt = tonumber(arg2)
-    end
-    return
-  elseif arg1 == 'Hold' then  --Start holding specified buttons
-    heldButtons = arg2
-    return
-  elseif arg1 == 'Write' and allowCheats then
-    local _, _, valueType, address, valueToWrite, lock = string.find(arg2 .. ',','(.-),%s*(.-),%s*(.-),%s*(%d?)')
-    if address == nil then  --prevent the script from crashing if the line is formatted incorrectly
-      messageSend(string.format('Bad Write Line "%s"', rawLine), 0xFF0000)
-    elseif index == totalFramesAtIndex+1+justExitedLoad or lock == '1' then
-      local writeAddr = convertStringToAddress(address)
-      if lock == '1' and writeAddr ~= 0 then
-        lockedWriteValueList = string.format('%s%s, 0x%X, %s\n', lockedWriteValueList, valueType, writeAddr, valueToWrite)
-      elseif writeAddr ~= 0 then
-        writeValueList = string.format('%s%s, 0x%X, %s\n', writeValueList, valueType, writeAddr, valueToWrite)  --add values to write this frame to a list. Write them during the main loop so they get updated every input call
-      end
-    end
-    return
-  elseif arg1 == 'IR' then  --set IR values
-    local _, _, IRx, IRy = string.find(arg2 .. ',','(.-),%s*(.-),')
-    if tonumber(IRx) == nil or tonumber(IRy) == nil then
-      messageSend(string.format('Invalid IR value "%s"', arg2), 0xFF0000)
-      return
-    end
-    IR[0] = tonumber(IRx)
-    IR[1] = tonumber(IRy)
-    return
-  elseif arg1 == 'Unlock' then
-    lockedWriteValueList = ''
-    return
-  elseif arg1 == 'Read' then  --manage read files
-    doReadManagement()
-    return
-  elseif arg1 == 'End Read' then  --record endReadFrame so that we don't have to reindex the file after this
-    pauseLineAdvance = 0
-    isInMainFile = true
-    tilt = 512
-    IR[0] = 460
-    IR[1] = 490
-    heldButtons = ''
-    local readCommandFileName = arg2
-    local loadDocumentationStartPos, loadFileNameEndPos = string.find(loadDoc, string.format('%s,', readCommandFileName), 1, true)
-    loadDoc = string.format('%s%7.0f%s',string.sub(loadDoc, 1, loadFileNameEndPos+10), totalFramesAtIndex+1, string.sub(loadDoc, loadFileNameEndPos+18, -1))
-    return
-  elseif arg1 == 'Insert Load' then  --pause replaying inputs until the next load ends
-    doLoadManagement()
-    return
-  elseif arg1 == 'Manual' then
-    if tonumber(arg2) == nil then
-      messageSend(string.format('Invalid Offset "%s"', rawLine), 0xFF0000)
-      return
-    end
-    offset = tonumber(arg2)
-    index = GetFrameCount() - offset
-    initComplete = true
-    messageSend(string.format('Offset updated manually to %.0f', offset), 0x00FF00)
-  elseif arg1 == 'Enforce Legal' then
-    allowCheats = false
-    return
-  elseif arg1 == 'repeat' or arg1 == 'Repeat' then
-    local nextRepeatLineStartPos = endLinePos
-    local afterNextRepeatLine = endLinePos
-    local repeatEndPos = endLinePos
-    local afterCommand = endLinePos
-    while true do
-      nextRepeatLineStartPos, afterNextRepeatLine = string.find(rawFile, '\n[Rr]epeat', afterNextRepeatLine)
-      repeatEndPos, afterCommand = string.find(rawFile, '\n[Ee]nd[Rr]epeat', afterCommand)
-      if repeatEndPos == nil then
-        messageSend(string.format('No "EndRepeat" found!  %s', rawLine), 0xFF0000)
-        return
-      end
-      if nextRepeatLineStartPos == nil then break end
-      if repeatEndPos < nextRepeatLineStartPos then break end
-    end
-    local arg2 = tonumber(arg2)
-    if arg2 == 0 or arg2 == nil then
-      arg2 = 1
-    end
-    rawFile = string.format('%sendrepeat,%d,%d,%d,%d%s', string.sub(rawFile, 1, repeatEndPos), endLinePos, lineNumber, arg2-1, arg2, string.sub(rawFile, string.find(rawFile, '\n', afterCommand), -1))
-    loopNum = 1
-    totalLoopNum = arg2
-    return
-    --endrepeat, endlinepos, linenumber, remainingloops, totalloops
-  elseif arg1 == 'endrepeat' then
-    if arg2 == '' then
-      messageSend(string.format('"EndRepeat" found on line %d with no associated Repeat command!', lineNumber), 0xFF0000)
-      return
-    end
-    _, _, arg2, arg3, arg4, arg5 = string.find(arg2, '(%d-),(%d-),(%d-),(%d+)')
-    if arg4 ~= '0' then
-      rawFile = string.format('%sendrepeat,%d,%d,%d,%d%s', string.sub(rawFile, 1, startLinePos-1), arg2, arg3, tonumber(arg4)-1, arg5, string.sub(rawFile, endLinePos, -1))
-      loopNum = arg5-arg4+1
-      totalLoopNum = arg5
-      endLinePos = arg2
-      if isInMainFile then lineNumber = arg3 end
-    else
-      loopNum = 0
-      totalLoopNum = 0
-    end
-    return
-  elseif arg1 == 'SubFrame' then
-    totalFramesAtIndex = totalFramesAtIndex + 1
-    currLineProgress = 0
-    inputDuration = 1
-    lineInputs = ''
-    if index == totalFramesAtIndex then
-      subFrame = true
-      local _, _, call1, call2, call3 = string.find(arg2 .. ',,,', '(.-),(.-),(.-),')
-      if call2 == '' then
-        call2 = call1
-      end
-      if call3 == '' then
-        call3 = call2
-      end
-      subFrameInputs = {call1, call2, call3}
-    end
-  elseif arg1 == 'set' and isInMainFile then
-    local _, _, var, val = string.find(arg2, '(%w+),(%w+)')
-    if var == 'lineNumber' then
-      lineNumber = tonumber(val)
-    elseif var == 'pauseLineAdvance' then
-      pauseLineAdvance = tonumber(val)
-    end
-    return
-  end
-end
-
-function processCommand()
-  if arg1 == 'Save LoadDoc' then
-    local writeFileName
-    if arg2 == '' then
-      writeFileName = string.format('Studio\\LoadDocs\\%s.txt',ReadValueString(0x80D20F04, 99))
-    elseif string.sub(arg2, -4) == '.txt' then
-      writeFileName = string.format('Studio\\LoadDocs\\%s', arg2)
-    else
-      writeFileName = string.format('Studio\\LoadDocs\\%s.txt', arg2)
-    end
-    writeFile = io.open(writeFileName, "w+")
-    writeFile:write(string.format('Offset: %.0f\n%s', offset, loadDoc))
-    writeFile:close()
-    messageSend(string.format('LoadDoc Saved Successfully!  %s', writeFileName), 0x00FF00)
-  elseif arg1 == 'Open LoadDoc' then
-    openLoadDoc()
-  elseif arg1 == 'Delete' and allowCheats then
-    local deleteAddr = convertStringToAddress(arg2)
-    if deleteAddr ~= 0 then
-      arg2 = ReadValueString(ReadValue32(deleteAddr + 0x6C), 0x100)
-      messageSend(string.format('Deleted "%s" (0x%X)', arg2, deleteAddr), 0x00FF00)
-      WriteValue8(deleteAddr+0xB, 2)
-      end
-  elseif arg1 == 'InputDisplay' and allowCheats then  --bool input display (0=off, 1=on; for Hitbox Mod v7)
-    WriteValue8(0x80D2B100, arg2)
-  elseif arg1 == 'HitboxMode' and allowCheats then  --change hitbox configuration (0=off, 1=basic, 2=complex; for Hitbox Mod v7)
-    WriteValue8(0x80D2B107, arg2)
-  elseif arg1 == 'Grid' and allowCheats then  --change hitbox configuration (0=off, 1=basic, 2=complex; for Hitbox Mod v7)
-    WriteValue8(0x80D2B150, arg2)
-  elseif arg1 == 'InfoDisplay' and allowCheats then  --change hitbox configuration (0=off, 1=basic, 2=complex; for Hitbox Mod v7)
-    WriteValue8(0x80D2B157, arg2)
-  end
 end
 
 function convertLineToInputs(line)
@@ -503,7 +512,7 @@ function doLoadManagement()
       --messageSend('Wrote to LoadDoc 1', 0x00FFFF)
     end
 
-    if index == totalFramesAtIndex + 1 or GetFrameCount() == scriptFirstFrame+1 then  --make the script think it wasn't loading on the frame before this command to prevent ds issues in some situations
+    if index == totalFramesAtIndex + 1 or GetFrameCount() == scriptFirstFrame+1 then  --make the script think it wasn't loading on the frame before this command to prevent issues in some situations
       prevLoadInfo[2] = false
     end
 
@@ -512,6 +521,7 @@ function doLoadManagement()
       --messageSend('Wrote to LoadDoc 2', 0x00FFFF)
       totalFramesAtIndex = totalFramesAtIndex + index - startLoadFrame - 1
       justExitedLoad = 1
+      pauseLineAdvance = 0
     else
       messageSend('Waiting for load to end...', 0xD2691E)
       exitLoop = true
